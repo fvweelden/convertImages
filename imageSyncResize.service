@@ -1,0 +1,12 @@
+[Unit]
+Description=ImageSyncResize
+
+[Service]
+TimeoutSec=0
+PIDFile=/var/run/imageSyncResize.pid
+WorkingDirectory=/data/packshots
+ExecStart=/usr/bin/php -f resize.php
+KillMode=process
+
+[Install]
+WantedBy=default.target

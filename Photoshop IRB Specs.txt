@@ -1,0 +1,46 @@
+
+
+8BIM is the signature for Photoshop Image Resource Block (IRB). This kind of information could be found in images such as TIFF, JPEG, Photoshop native image format etc. It could also be found in non-image documents such as in PDF.
+
+The structure of the IRB is as follows: 
+
+Each IRB block starts with 4 bytes signature which translates to string "8BIM." After that, is a 2 bytes unique identifier denoting the kind of resource for this IRB. For example: 0x040c for thumbnail; 0x041a for slices; 0x0408 for grid information; 0x040f for ICC Profile etc.
+
+After the identifier is a variable length string for name. The first byte of the string tells the length of the string (excluding the first length byte). After the first byte comes the string itself. There is a requirement that the length of the whole string (including the length byte) should be even. Otherwise, pad one more byte after the string.
+
+The next 4 bytes specifies the size of the actual data for this resource block followed by the data with the specified length. The total length of the data also should be an even number. So if the size of the data is odd, pad another one byte. This finishes a whole 8BIM.
+
+There could be more than one IRBs but they all conform to the same structure as described above. How to interpret the data depends on the unique identifier.
+
+Now let's see how the IRBs are include in images. For a JPEG image, metadata could be present as one of the application (APPn) segment. Since different application could use the same APPn segment to store it's own metadata, there must be some kind of identifier to let the image reader know what kind of information is contained inside the APPn. Photoshop uses APP13 as it's IRB container and the APP13 contains "Photoshop 3.0" as it's identifier.
+
+For TIFF image which is tag based and arranged in a directory structure. There is a private tag 0x8649 called "PHOTOSHOP" to insert IRB information.
+
+Let's take a look at the TIFF image format (quoted from this source):
+
+The basic structure of a TIFF file is as follows:
+
+The first 8 bytes forms the header. The first two bytes of which is either "II" for little endian byte ordering or "MM" for big endian byte ordering. In what follows we'll be assuming big endian ordering. Note: any true TIFF reading software is supposed to be handle both types. The next two bytes of the header should be 0 and 42dec (2ahex). The remaining 4 bytes of the header is the offset from the start of the file to the first "Image File Directory" (IFD), this normally follows the image data it applies to. In the example below there is only one image and one IFD.
+
+An IFD consists of two bytes indicating the number of entries followed by the entries themselves. The IFD is terminated with 4 byte offset to the next IFD or 0 if there are none. A TIFF file must contain at least one IFD!
+
+Each IFD entry consists of 12 bytes. The first two bytes identifies the tag type (as in Tagged Image File Format). The next two bytes are the field type (byte, ASCII, short int, long int, ...). The next four bytes indicate the number of values. The last four bytes is either the value itself or an offset to the values. Considering the first IFD entry from the example gievn below:
+
+       0100 0003 0000 0001 0064 0000
+       |    |    |         |
+ tag --+    |    |         |
+ short int -+    |         |
+ one value ------+         |
+ value of 100 -------------+
+In order to be able to read a TIFF IFD, two things must be done first:
+
+A way to be able to read either big or little endian data
+A random access input stream which wraps the image input so that we can jump forward and backward while reading the directory.
+Now let's assume we have a structure for each and every 12 bytes IFD entry called Entry. We read the first two bytes (the endianess is not applied here since it's either MM or II) to determine the endianess. Now we can read the remaining IFD data and interpret them according to the the endianess we already know.
+
+Right now we have a list of Entry. It's not so difficult to insert a new Entry into the list - in our case, it's a "Photoshop" Entry. The difficult part is how to write the data back to create a new TIFF. You can't just write the Entries back to the output stream directly which will break the
+overall structure of the TIFF. Cautions must be taken to keep track of where you write the data and update the pointer of the data accordingly.
+
+From the above description, we can see that it's not so easy to insert new Entries into TIFF format. JPEG format will make it much easier given the fact that each JPEG segment is self-contained.
+
+I don't have related C# code but there is a Java library here which could manipulate metadata for JPEG and TIFF images like insert EXIF, IPTC, thumbnail etc as 8BIM. In your case, if file size is not a big issue, the above mentioned library can insert a small thumbnail into a Photoshop tag as one 8BIM.
